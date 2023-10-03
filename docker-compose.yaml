@@ -1,0 +1,57 @@
+version: '3'
+services:
+  controller:
+    build:
+      context: .
+      dockerfile: cmd/controller/Dockerfile
+    ports:
+      - "8085:8085"
+    volumes:
+      - ./configs/keys/iot.key:/keys/shared.key:ro
+    networks:
+      - iot
+
+  gateway:
+    build:
+      context: .
+      dockerfile: cmd/gateway/Dockerfile
+    depends_on:
+      - controller
+    networks:
+      - iot
+
+  thermostat:
+    build:
+      context: .
+      dockerfile: cmd/smart_home_devices/thermostat/Dockerfile
+    depends_on:
+      - gateway
+    volumes:
+      - ./configs/keys/iot.key:/keys/shared.key:ro
+    networks:
+      - iot
+
+  humidity_sensor:
+    build:
+      context: .
+      dockerfile: cmd/smart_home_devices/humidity_sensor/Dockerfile
+    depends_on:
+      - gateway
+    volumes:
+      - ./configs/keys/iot.key:/keys/shared.key:ro
+    networks:
+      - iot
+
+  light_switch:
+    build:
+      context: .
+      dockerfile: cmd/smart_home_devices/light_switch/Dockerfile
+    depends_on:
+      - gateway
+    volumes:
+      - ./configs/keys/iot.key:/keys/shared.key:ro
+    networks:
+      - iot
+
+networks:
+  iot:
