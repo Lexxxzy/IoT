@@ -9,7 +9,7 @@ import (
 const deviceTag = "HUM"
 
 func sendDataHumiditySensor() {
-	base_device.SendData([]byte(fmt.Sprintf("Humidity: %d%%", 60)), deviceTag)
+	base_device.SendData([]byte(fmt.Sprintf("Humidity: %d%%", 60)))
 }
 
 func handleHumiditySensorData(data string) {
@@ -17,7 +17,8 @@ func handleHumiditySensorData(data string) {
 }
 
 func main() {
-	go base_device.AcceptData(":8085", handleHumiditySensorData)
+	base_device.Initialize(deviceTag)
+	go base_device.AcceptData(handleHumiditySensorData)
 
 	for {
 		sendDataHumiditySensor()

@@ -2,83 +2,80 @@ package main
 
 import (
 	"fmt"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/Lexxxzy/iot-sockets/internal/encryption"
 	"log"
 	"net"
+    "strings"
 )
 
-func handleCommands(encryptedData []byte) {
+var mqttClient mqtt.Client
+
+func main() {
+	opts := mqtt.NewClientOptions().AddBroker("tcp://mqttroute:1883").SetClientID("controller")
+	mqttClient = mqtt.NewClient(opts)
+	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
+		log.Fatal(token.Error())
+	}
+
+	mqttClient.Subscribe("#", 0, func(client mqtt.Client, msg mqtt.Message) {
+		handleCommands(msg.Topic(), msg.Payload())
+	})
+
+	go startNetcatListener()
+
+	select {}
+}
+
+func handleCommands(topic string, encryptedData []byte) {
 	data, err := encryption.Decrypt(encryptedData)
 	if err != nil {
 		log.Printf("Decryption failed: %v", err)
 		return
 	}
-	fmt.Println("Received:", string(data))
+	fmt.Printf("Received from %s: %s\n", topic, string(data))
 }
 
-func sendCommands(command string) {
-	encryptedCommand := encryption.Encrypt([]byte(command[4:]))
+func startNetcatListener() {
+    ln, err := net.Listen("tcp", ":8085")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer ln.Close()
 
-	gtw, err := net.Dial("tcp", "gateway:8081")
-	if err != nil {
-		log.Printf("Error dialing controller: %v", err)
-	}
-
-	_, err = gtw.Write(append([]byte(command[:4]), encryptedCommand...))
-	if err != nil {
-		log.Printf("Could not write to gateway: %v", err)
-	}
+    for {
+        conn, err := ln.Accept()
+        if err != nil {
+            log.Println(err)
+            continue
+        }
+        go handleNetcatConnection(conn)
+    }
 }
 
-func main() {
-	// Listener for incoming data
-	go func() {
-		listener, err := net.Listen("tcp", ":8080")
-		if err != nil {
-			log.Fatalf("Error setting up listener: %v", err)
-		}
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				log.Printf("Error accepting connection: %v", err)
-				continue
-			}
-			go func(conn net.Conn) {
-				buf := make([]byte, 1024)
-				n, err := conn.Read(buf)
-				if err != nil {
-					log.Printf("Error reading from connection: %v", err)
-					return
-				}
-				handleCommands(buf[:n])
-			}(conn)
-		}
-	}()
+func handleNetcatConnection(conn net.Conn) {
+    defer conn.Close()
 
-	// Listener for outgoing data
-	go func() {
-		outgoingListener, err := net.Listen("tcp", ":8085")
-		if err != nil {
-			log.Fatalf("Error setting up outgoing listener: %v", err)
-		}
-		for {
-			conn, err := outgoingListener.Accept()
-			if err != nil {
-				log.Printf("Error accepting connection on outgoing port: %v", err)
-				continue
-			}
-			go func(conn net.Conn) {
-				buf := make([]byte, 1024)
-				n, err := conn.Read(buf)
-				if err != nil {
-					log.Printf("Error reading from connection: %v", err)
-					return
-				}
-				command := string(buf[:n])
-				sendCommands(command)
-			}(conn)
-		}
-	}()
+    buf := make([]byte, 1024)
+    n, err := conn.Read(buf)
+    if err != nil {
+        log.Println(err)
+        return
+    }
 
-	select {}
+    inputData := string(buf[:n])
+    parts := strings.SplitN(inputData, " ", 2)
+    if len(parts) != 2 {
+        log.Println("Invalid input format")
+        return
+    }
+
+    deviceTag, command := parts[0], parts[1]
+    topic := deviceTag + "/commands"
+    sendCommands(topic, command)
+}
+
+func sendCommands(topic, command string) {
+	encryptedCommand := encryption.Encrypt([]byte(command))
+	mqttClient.Publish(topic, 0, false, encryptedCommand)
 }

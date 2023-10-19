@@ -2,9 +2,11 @@
 FROM golang:1.21 AS build-env
 WORKDIR /app
 COPY go.mod .
+COPY go.sum . 
+COPY vendor/ ./vendor/
 COPY internal/ ./internal/
 COPY cmd/smart_home_devices/thermostat/thermostat.go ./thermostat.go
-RUN CGO_ENABLED=0 GOOS=linux go build -o thermostat .
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -o thermostat .
 
 # Final stage
 FROM alpine:latest

@@ -10,15 +10,9 @@ services:
       - ./configs/keys/iot.key:/keys/shared.key:ro
     networks:
       - iot
-
-  gateway:
-    build:
-      context: .
-      dockerfile: cmd/gateway/Dockerfile
     depends_on:
-      - controller
-    networks:
-      - iot
+      - mqttroute
+    command: ["wait-for-it.sh", "mqttroute:1883", "--", "/app/controller"]
 
   thermostat:
     build:
@@ -35,8 +29,6 @@ services:
     build:
       context: .
       dockerfile: cmd/smart_home_devices/humidity_sensor/Dockerfile
-    depends_on:
-      - gateway
     volumes:
       - ./configs/keys/iot.key:/keys/shared.key:ro
     networks:
@@ -46,12 +38,24 @@ services:
     build:
       context: .
       dockerfile: cmd/smart_home_devices/light_switch/Dockerfile
-    depends_on:
-      - gateway
     volumes:
       - ./configs/keys/iot.key:/keys/shared.key:ro
     networks:
       - iot
+  
+  mqttroute:
+    image: eclipse-mosquitto
+    container_name: mqttroute
+    ports:
+      - "1883:1883"  
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    networks:
+      - iot
+    
 
 networks:
   iot:

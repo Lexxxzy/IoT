@@ -9,7 +9,7 @@ import (
 const deviceTag = "THM"
 
 func sendDataThermostat() {
-	base_device.SendData([]byte(fmt.Sprintf("Thermostat: %d°C", 20)), deviceTag)
+	base_device.SendData([]byte(fmt.Sprintf("Thermostat: %d°C", 20)))
 }
 
 func handleThermostatData(data string) {
@@ -17,7 +17,8 @@ func handleThermostatData(data string) {
 }
 
 func main() {
-	go base_device.AcceptData(":8085", handleThermostatData)
+	base_device.Initialize(deviceTag)
+	go base_device.AcceptData(handleThermostatData)
 
 	for {
 		sendDataThermostat()

@@ -25,7 +25,7 @@ func Encrypt(plaintext []byte) []byte {
 	return gcm.Seal(nonce, nonce, plaintext, nil)
 }
 
-func Decrypt(ciphertext []byte) ([]byte, error) {
+func Decrypt(encryptedText []byte) ([]byte, error) {
 	key := readKey()
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -36,11 +36,11 @@ func Decrypt(ciphertext []byte) ([]byte, error) {
 		return nil, err
 	}
 	nonceSize := gcm.NonceSize()
-	if len(ciphertext) < nonceSize {
-		return nil, fmt.Errorf("ciphertext too short")
+	if len(encryptedText) < nonceSize {
+		return nil, fmt.Errorf("encryptedText too short")
 	}
-	nonce, ciphertext := ciphertext[:nonceSize], ciphertext[nonceSize:]
-	return gcm.Open(nil, nonce, ciphertext, nil)
+	nonce, encryptedText := encryptedText[:nonceSize], encryptedText[nonceSize:]
+	return gcm.Open(nil, nonce, encryptedText, nil)
 }
 
 func readKey() []byte {

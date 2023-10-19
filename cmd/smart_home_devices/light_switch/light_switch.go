@@ -12,7 +12,7 @@ const deviceTag = "LIG"
 var currentState string = "OFF"
 
 func sendDataLightSwitch() {
-	base_device.SendData([]byte(fmt.Sprintf("Light: %s", currentState)), deviceTag)
+	base_device.SendData([]byte(fmt.Sprintf("Light: %s", currentState)))
 }
 
 func handleLightSwitchData(data string) {
@@ -26,7 +26,8 @@ func handleLightSwitchData(data string) {
 }
 
 func main() {
-	go base_device.AcceptData(":8085", handleLightSwitchData)
+	base_device.Initialize(deviceTag)
+	go base_device.AcceptData(handleLightSwitchData)
 
 	for {
 		sendDataLightSwitch()

@@ -1,49 +1,39 @@
 package base_device
 
 import (
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/Lexxxzy/iot-sockets/internal/encryption"
 	"log"
-	"net"
 )
 
-func AcceptData(port string, callback func(string)) {
-	ln, err := net.Listen("tcp", port)
-	if err != nil {
-		log.Fatal(err)
-	}
+var (
+	mqttClient mqtt.Client
+	clientID   string
+)
 
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			log.Fatal(err)
-		}
+func Initialize(deviceTag string) {
+	opts := mqtt.NewClientOptions().AddBroker("tcp://mqttroute:1883").SetClientID(deviceTag)
+	mqttClient = mqtt.NewClient(opts)
+	clientID = deviceTag
 
-		go func(conn net.Conn) {
-			defer conn.Close()
-
-			data := make([]byte, 256)
-			n, err := conn.Read(data)
-			if err != nil {
-				log.Println("Error reading from connection:", err)
-				return
-			}
-
-			decryptedData, err := encryption.Decrypt(data[:n])
-			if err != nil {
-				log.Fatal(err)
-			}
-			callback(string(decryptedData))
-		}(conn)
+	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
+		log.Fatal(token.Error())
 	}
 }
 
-func SendData(message []byte, deviceTag string) {
-	conn, err := net.Dial("tcp", "gateway:8081")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer conn.Close()
+func AcceptData(callback func(string)) {
+	topic := clientID + "/#"
+	mqttClient.Subscribe(topic, 0, func(client mqtt.Client, msg mqtt.Message) {
+		decryptedData, err := encryption.Decrypt(msg.Payload())
+		if err != nil {
+			log.Fatal(err)
+		}
+		callback(string(decryptedData))
+	})
+}
 
+func SendData(message []byte) {
+	topic := clientID + "/commands"
 	encryptedData := encryption.Encrypt(message)
-	conn.Write(append([]byte("C"+deviceTag), encryptedData...))
+	mqttClient.Publish(topic, 0, false, encryptedData)
 }
