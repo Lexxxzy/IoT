@@ -19,7 +19,7 @@ services:
       context: .
       dockerfile: cmd/smart_home_devices/thermostat/Dockerfile
     depends_on:
-      - gateway
+      - mqttroute
     volumes:
       - ./configs/keys/iot.key:/keys/shared.key:ro
     networks:
@@ -55,7 +55,18 @@ services:
       - ./mosquitto/log:/mosquitto/log
     networks:
       - iot
-    
+
+  telegram_bot:
+    build:
+      context: .
+      dockerfile: cmd/bot/Dockerfile
+    depends_on:
+      - mqttroute
+    env_file:
+      - cmd/bot/.env
+    networks:
+      - iot
+    command: ["wait-for-it.sh", "mqttroute:1883", "--", "/app/telegram_bot"]
 
 networks:
   iot:

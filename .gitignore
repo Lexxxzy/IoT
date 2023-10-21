@@ -122,3 +122,8 @@ fabric.properties
 *.log
 
 vendor
+.DS_STORE
+homeassistant_config/*
+cmd/bot/.env
+
+*.env

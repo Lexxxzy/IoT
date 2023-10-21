@@ -7,7 +7,12 @@ import (
 	"time"
 )
 
-const deviceTag = "LIG"
+const (
+	deviceTag = "LIG"
+	ON = "ON"
+	OFF = "OFF"
+	TOGGLE = "toggle"
+)
 
 var currentState string = "OFF"
 
@@ -17,7 +22,18 @@ func sendDataLightSwitch() {
 
 func handleLightSwitchData(data string) {
 	data = strings.TrimRight(data, "\n")
-	if (data == "ON" || data == "OFF") && currentState != data {
+
+	if data == TOGGLE {
+		if currentState == ON {
+			currentState = OFF
+		} else {
+			currentState = ON
+		}
+		sendDataLightSwitch()
+		return
+	}
+
+	if (data == ON || data == OFF) && currentState != data {
 		currentState = data
 		sendDataLightSwitch()
 	} else {

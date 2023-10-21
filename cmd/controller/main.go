@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"github.com/Lexxxzy/iot-sockets/internal/encryption"
+	//"github.com/Lexxxzy/iot-sockets/internal/encryption"
 	"log"
 	"net"
     "strings"
@@ -27,12 +27,12 @@ func main() {
 	select {}
 }
 
-func handleCommands(topic string, encryptedData []byte) {
-	data, err := encryption.Decrypt(encryptedData)
-	if err != nil {
-		log.Printf("Decryption failed: %v", err)
-		return
-	}
+func handleCommands(topic string, data []byte) {
+	// data, err := encryption.Decrypt(encryptedData)
+	// if err != nil {
+	// 	log.Printf("Decryption failed: %v", err)
+	// 	return
+	// }
 	fmt.Printf("Received from %s: %s\n", topic, string(data))
 }
 
@@ -76,6 +76,6 @@ func handleNetcatConnection(conn net.Conn) {
 }
 
 func sendCommands(topic, command string) {
-	encryptedCommand := encryption.Encrypt([]byte(command))
-	mqttClient.Publish(topic, 0, false, encryptedCommand)
+	// encryptedCommand := encryption.Encrypt([]byte(command))
+	mqttClient.Publish(topic, 0, false, command)
 }

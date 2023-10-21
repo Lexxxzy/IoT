@@ -2,7 +2,7 @@ package base_device
 
 import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"github.com/Lexxxzy/iot-sockets/internal/encryption"
+	// "github.com/Lexxxzy/iot-sockets/internal/encryption"
 	"log"
 )
 
@@ -24,16 +24,16 @@ func Initialize(deviceTag string) {
 func AcceptData(callback func(string)) {
 	topic := clientID + "/#"
 	mqttClient.Subscribe(topic, 0, func(client mqtt.Client, msg mqtt.Message) {
-		decryptedData, err := encryption.Decrypt(msg.Payload())
-		if err != nil {
-			log.Fatal(err)
-		}
-		callback(string(decryptedData))
+		// decryptedData, err := encryption.Decrypt(msg.Payload())
+		// if err != nil {
+		// 	log.Fatal(err)
+		// }
+		callback(string(msg.Payload()))
 	})
 }
 
 func SendData(message []byte) {
 	topic := clientID + "/commands"
-	encryptedData := encryption.Encrypt(message)
-	mqttClient.Publish(topic, 0, false, encryptedData)
+	// encryptedData := encryption.Encrypt(message)
+	mqttClient.Publish(topic, 0, false, message)
 }
