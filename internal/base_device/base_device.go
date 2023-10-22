@@ -1,39 +1,44 @@
 package base_device
 
 import (
-	mqtt "github.com/eclipse/paho.mqtt.golang"
-	// "github.com/Lexxxzy/iot-sockets/internal/encryption"
+	"bytes"
+	"github.com/Lexxxzy/iot-sockets/internal/encryption"
+	"github.com/labstack/echo/v4"
+	"io/ioutil"
 	"log"
+	"net/http"
 )
 
 var (
-	mqttClient mqtt.Client
-	clientID   string
+	clientID string
 )
 
 func Initialize(deviceTag string) {
-	opts := mqtt.NewClientOptions().AddBroker("tcp://mqttroute:1883").SetClientID(deviceTag)
-	mqttClient = mqtt.NewClient(opts)
 	clientID = deviceTag
-
-	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-		log.Fatal(token.Error())
-	}
 }
 
-func AcceptData(callback func(string)) {
-	topic := clientID + "/#"
-	mqttClient.Subscribe(topic, 0, func(client mqtt.Client, msg mqtt.Message) {
-		// decryptedData, err := encryption.Decrypt(msg.Payload())
-		// if err != nil {
-		// 	log.Fatal(err)
-		// }
-		callback(string(msg.Payload()))
+func AcceptData(e *echo.Echo, callback func(string)) {
+	e.POST("/command", func(c echo.Context) error {
+		encryptedData, err := ioutil.ReadAll(c.Request().Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+		decryptedData, err := encryption.Decrypt(encryptedData)
+		if err != nil {
+			log.Fatal(err)
+		}
+		callback(string(decryptedData))
+		return c.JSON(http.StatusOK, map[string]string{"status": "success"})
 	})
 }
 
-func SendData(message []byte) {
-	topic := clientID + "/commands"
-	// encryptedData := encryption.Encrypt(message)
-	mqttClient.Publish(topic, 0, false, message)
+func SendData(message []byte) int {
+	endpoint := "http://controller:8080/receive"
+	encryptedData := encryption.Encrypt(message)
+	_, err := http.Post(endpoint, "application/octet-stream", bytes.NewReader(encryptedData))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return 200
 }
