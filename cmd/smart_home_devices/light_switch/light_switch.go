@@ -1,39 +1,30 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/Lexxxzy/iot-sockets/internal/base_device"
+	"github.com/labstack/echo/v4"
 	"strings"
 	"time"
 )
 
-const (
-	deviceTag = "LIG"
-	ON = "ON"
-	OFF = "OFF"
-	TOGGLE = "toggle"
-)
+const deviceTag = "LIG"
 
 var currentState string = "OFF"
 
 func sendDataLightSwitch() {
-	base_device.SendData([]byte(fmt.Sprintf("Light: %s", currentState)))
+	var data = map[string]string{"device": "Light", "state": currentState}
+	newData, err := json.Marshal(data)
+	if err != nil {
+		fmt.Println(err)
+	}
+	base_device.SendData(newData)
 }
 
 func handleLightSwitchData(data string) {
 	data = strings.TrimRight(data, "\n")
-
-	if data == TOGGLE {
-		if currentState == ON {
-			currentState = OFF
-		} else {
-			currentState = ON
-		}
-		sendDataLightSwitch()
-		return
-	}
-
-	if (data == ON || data == OFF) && currentState != data {
+	if (data == "ON" || data == "OFF") && currentState != data {
 		currentState = data
 		sendDataLightSwitch()
 	} else {
@@ -42,11 +33,17 @@ func handleLightSwitchData(data string) {
 }
 
 func main() {
-	base_device.Initialize(deviceTag)
-	go base_device.AcceptData(handleLightSwitchData)
+	e := echo.New()
 
-	for {
-		sendDataLightSwitch()
-		time.Sleep(30 * time.Second)
-	}
+	base_device.Initialize(deviceTag)
+	base_device.AcceptData(e, handleLightSwitchData)
+
+	go func() {
+		for {
+			sendDataLightSwitch()
+			time.Sleep(30 * time.Second)
+		}
+	}()
+
+	e.Start(":8080")
 }

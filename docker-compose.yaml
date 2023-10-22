@@ -5,25 +5,23 @@ services:
       context: .
       dockerfile: cmd/controller/Dockerfile
     ports:
-      - "8085:8085"
+      - "8080:8080"
     volumes:
       - ./configs/keys/iot.key:/keys/shared.key:ro
     networks:
       - iot
-    depends_on:
-      - mqttroute
-    command: ["wait-for-it.sh", "mqttroute:1883", "--", "/app/controller"]
+    command: ["/app/controller"]
 
   thermostat:
     build:
       context: .
       dockerfile: cmd/smart_home_devices/thermostat/Dockerfile
-    depends_on:
-      - mqttroute
     volumes:
       - ./configs/keys/iot.key:/keys/shared.key:ro
     networks:
       - iot
+    depends_on:
+      - controller
 
   humidity_sensor:
     build:
@@ -33,6 +31,8 @@ services:
       - ./configs/keys/iot.key:/keys/shared.key:ro
     networks:
       - iot
+    depends_on:
+      - controller
 
   light_switch:
     build:
@@ -40,33 +40,11 @@ services:
       dockerfile: cmd/smart_home_devices/light_switch/Dockerfile
     volumes:
       - ./configs/keys/iot.key:/keys/shared.key:ro
+    depends_on: 
+      - controller
     networks:
       - iot
-  
-  mqttroute:
-    image: eclipse-mosquitto
-    container_name: mqttroute
-    ports:
-      - "1883:1883"  
-      - "9001:9001"
-    volumes:
-      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
-      - ./mosquitto/data:/mosquitto/data
-      - ./mosquitto/log:/mosquitto/log
-    networks:
-      - iot
-
-  telegram_bot:
-    build:
-      context: .
-      dockerfile: cmd/bot/Dockerfile
-    depends_on:
-      - mqttroute
-    env_file:
-      - cmd/bot/.env
-    networks:
-      - iot
-    command: ["wait-for-it.sh", "mqttroute:1883", "--", "/app/telegram_bot"]
+    
 
 networks:
   iot:

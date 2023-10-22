@@ -1,81 +1,100 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
-	mqtt "github.com/eclipse/paho.mqtt.golang"
-	//"github.com/Lexxxzy/iot-sockets/internal/encryption"
-	"log"
-	"net"
-    "strings"
+	"github.com/Lexxxzy/iot-sockets/internal/encryption"
+	"github.com/labstack/echo/v4"
+	"io"
+	"net/http"
+	"sync"
 )
 
-var mqttClient mqtt.Client
+var deviceURLs = map[string]string{
+	"LIG": "http://light_switch:8080/command",
+	"THM": "http://thermostat:8080/command",
+	"HUM": "http://humidity_sensor:8080/command",
+}
+
+var mutex = &sync.RWMutex{}
+
+type Container struct {
+	mu   sync.Mutex
+	data map[string]string
+}
+
+func (c *Container) renewStatus(jsonData map[string]string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.data[jsonData["device"]] = jsonData["state"]
+}
+
+var dataContainer = Container{
+	data: map[string]string{
+		"Light":      "N/A",
+		"Thermostat": "N/A",
+		"Humidity":   "N/A",
+	},
+}
 
 func main() {
-	opts := mqtt.NewClientOptions().AddBroker("tcp://mqttroute:1883").SetClientID("controller")
-	mqttClient = mqtt.NewClient(opts)
-	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-		log.Fatal(token.Error())
+	e := echo.New()
+
+	e.POST("/receive", handleReceive)
+	e.POST("/send/:deviceID", handleSend)
+	e.GET("/", getData)
+
+	e.Start(":8080")
+}
+
+func handleReceive(c echo.Context) error {
+	encryptedData, err := io.ReadAll(c.Request().Body)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid payload"})
 	}
 
-	mqttClient.Subscribe("#", 0, func(client mqtt.Client, msg mqtt.Message) {
-		handleCommands(msg.Topic(), msg.Payload())
-	})
+	received, err := encryption.Decrypt(encryptedData)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Decryption failed"})
+	}
 
-	go startNetcatListener()
+	var jsonData = map[string]string{}
+	err = json.Unmarshal(received, &jsonData)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid JSON"})
+	}
 
-	select {}
+	dataContainer.renewStatus(jsonData)
+	fmt.Printf("Received: %s\n", string(received))
+
+	return c.JSON(http.StatusOK, dataContainer.data)
 }
 
-func handleCommands(topic string, data []byte) {
-	// data, err := encryption.Decrypt(encryptedData)
-	// if err != nil {
-	// 	log.Printf("Decryption failed: %v", err)
-	// 	return
-	// }
-	fmt.Printf("Received from %s: %s\n", topic, string(data))
+func getData(c echo.Context) error {
+	return c.JSON(http.StatusOK, dataContainer.data)
 }
 
-func startNetcatListener() {
-    ln, err := net.Listen("tcp", ":8085")
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer ln.Close()
+func handleSend(c echo.Context) error {
+	deviceID := c.Param("deviceID")
+	commandData, err := io.ReadAll(c.Request().Body)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "Invalid payload"})
+	}
+	println("DEBUG: ", string(commandData))
 
-    for {
-        conn, err := ln.Accept()
-        if err != nil {
-            log.Println(err)
-            continue
-        }
-        go handleNetcatConnection(conn)
-    }
-}
+	deviceURL, exists := deviceURLs[deviceID]
+	if !exists {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": "Device not found"})
+	}
 
-func handleNetcatConnection(conn net.Conn) {
-    defer conn.Close()
+	encryptedCommand := encryption.Encrypt(commandData)
+	response, err := http.Post(deviceURL, "application/octet-stream", bytes.NewReader(encryptedCommand))
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to send command"})
+	}
+	println("DEBUG: ", response.Status)
+	defer response.Body.Close()
 
-    buf := make([]byte, 1024)
-    n, err := conn.Read(buf)
-    if err != nil {
-        log.Println(err)
-        return
-    }
-
-    inputData := string(buf[:n])
-    parts := strings.SplitN(inputData, " ", 2)
-    if len(parts) != 2 {
-        log.Println("Invalid input format")
-        return
-    }
-
-    deviceTag, command := parts[0], parts[1]
-    topic := deviceTag + "/commands"
-    sendCommands(topic, command)
-}
-
-func sendCommands(topic, command string) {
-	// encryptedCommand := encryption.Encrypt([]byte(command))
-	mqttClient.Publish(topic, 0, false, command)
+	return c.JSON(http.StatusOK, map[string]string{"status": "sent"})
 }
